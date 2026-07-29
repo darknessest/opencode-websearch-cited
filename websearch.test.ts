@@ -1193,6 +1193,76 @@ describe("WebsearchCitedPlugin", () => {
 		expect(typeof url === "string" ? url : "").toContain("/codex/responses");
 	});
 
+	it("routes the search to the caller provider when it is configured", async () => {
+		fetchMock.mockResolvedValueOnce(createFetchResponse(createAnthropicResponseBody("Search result body")));
+
+		const { hooks, tool } = await createEnv(
+			{
+				provider: {
+					openai: {
+						options: {
+							websearch_cited: { model: "gpt-4o-search-preview" },
+						},
+					},
+					anthropic: {
+						options: {
+							websearch_cited: { model: "claude-sonnet-4-6" },
+						},
+					},
+				},
+			} as Config,
+			"anthropic"
+		);
+
+		await invokeAuthLoader(hooks, "anthropic", {
+			type: "api",
+			key: "test-anthropic-key",
+		});
+
+		const result = await tool.execute({ query: "anthropic web search" }, createToolContext());
+
+		expect(result).toContain("Search result body");
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+		const [url] = fetchMock.mock.calls[0] ?? [];
+		expect(typeof url === "string" ? url : "").toBe("https://api.anthropic.com/v1/messages");
+	});
+
+	it("falls back to the first configured provider when the caller provider is not configured", async () => {
+		fetchMock.mockResolvedValueOnce(createFetchResponse(createOpenAIResponseBody("Search result body")));
+
+		const { hooks, tool } = await createEnv(
+			{
+				provider: {
+					openai: {
+						options: {
+							websearch_cited: { model: "gpt-4o-search-preview" },
+						},
+					},
+					anthropic: {
+						options: {
+							websearch_cited: { model: "claude-sonnet-4-6" },
+						},
+					},
+				},
+			} as Config,
+			"google"
+		);
+
+		await invokeAuthLoader(hooks, "openai", {
+			type: "oauth",
+			access: "test-access-token",
+			refresh: "test-refresh-token",
+			expires: Date.now() + 60_000,
+		});
+
+		const result = await tool.execute({ query: "openai web search" }, createToolContext());
+
+		expect(result).toContain("Search result body");
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+		const [url] = fetchMock.mock.calls[0] ?? [];
+		expect(typeof url === "string" ? url : "").toContain("/codex/responses");
+	});
+
 	it("index exports are valid plugin init functions", async () => {
 		const mod = await importIndexModule();
 		const entries = Object.entries(mod);
@@ -1245,8 +1315,24 @@ function isTool(value: unknown): value is Tool {
 	return typeof execute === "function";
 }
 
-function createPluginInput(): PluginInput {
-	return {} as PluginInput;
+function createPluginInput(callerProviderID?: string): PluginInput {
+	if (!callerProviderID) {
+		return {} as PluginInput;
+	}
+
+	return {
+		client: {
+			session: {
+				message: () =>
+					Promise.resolve({
+						data: {
+							info: { role: "assistant", providerID: callerProviderID },
+							parts: [],
+						},
+					}),
+			},
+		},
+	} as unknown as PluginInput;
 }
 
 async function importIndexModule(): Promise<Record<string, unknown>> {
@@ -1258,9 +1344,9 @@ async function importIndexModule(): Promise<Record<string, unknown>> {
 	return mod as Record<string, unknown>;
 }
 
-async function createEnv(config?: Config): Promise<{ hooks: Hooks[]; tool: Tool }> {
+async function createEnv(config?: Config, callerProviderID?: string): Promise<{ hooks: Hooks[]; tool: Tool }> {
 	const mod = await importIndexModule();
-	const input = createPluginInput();
+	const input = createPluginInput(callerProviderID);
 	const hooks: Hooks[] = [];
 
 	for (const [name, value] of Object.entries(mod)) {

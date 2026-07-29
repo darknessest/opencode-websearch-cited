@@ -1282,11 +1282,12 @@ function registerGetAuth(providerID, getAuth) {
 function resolveGetAuth(providerID) {
   return authRegistry.get(providerID);
 }
-function findFirstWebsearchCitedConfig(config) {
+function findWebsearchCitedConfigs(config) {
   const providers = config.provider;
   if (!providers || typeof providers !== "object") {
-    return {};
+    return { selections: [] };
   }
+  const selections = [];
   let firstError;
   for (const [providerID, providerConfig] of Object.entries(providers)) {
     if (!providerConfig || typeof providerConfig !== "object") {
@@ -1313,14 +1314,25 @@ function findFirstWebsearchCitedConfig(config) {
       firstError ??= `Unsupported provider "${providerID}" for websearch_cited.`;
       continue;
     }
-    return {
-      selected: {
-        providerID,
-        model: candidate.trim()
-      }
-    };
+    selections.push({
+      providerID,
+      model: candidate.trim()
+    });
   }
-  return firstError ? { error: firstError } : {};
+  if (selections.length === 0 && firstError) {
+    return { selections, error: firstError };
+  }
+  return { selections };
+}
+async function resolveCallerProviderID(client, sessionID, messageID) {
+  if (!client) {
+    return;
+  }
+  const { data } = await client.session.message({ path: { id: sessionID, messageID } });
+  if (!data || data.info.role !== "assistant") {
+    return;
+  }
+  return data.info.providerID;
 }
 function parseOpenAIOptions(providerConfig, model) {
   if (!isRecord(providerConfig)) {
@@ -1371,9 +1383,8 @@ function parseOpenAIOptions(providerConfig, model) {
   }
   return result;
 }
-var WebsearchCitedPlugin = () => {
-  let selectedProvider;
-  let selectedModel;
+var WebsearchCitedPlugin = ({ client: sdkClient }) => {
+  let selections = [];
   let openaiConfig = {};
   let configError;
   return Promise.resolve({
@@ -1391,18 +1402,13 @@ var WebsearchCitedPlugin = () => {
       ]
     },
     config: (config) => {
-      const { selected, error } = findFirstWebsearchCitedConfig(config);
-      selectedProvider = undefined;
-      selectedModel = undefined;
+      const { selections: found, error } = findWebsearchCitedConfigs(config);
+      selections = found;
       openaiConfig = {};
       configError = error;
-      if (selected) {
-        selectedProvider = selected.providerID;
-        selectedModel = selected.model;
-        if (selectedProvider === OPENAI_PROVIDER_ID) {
-          const openaiProvider = config.provider?.openai;
-          openaiConfig = parseOpenAIOptions(openaiProvider, selectedModel);
-        }
+      const openaiSelection = found.find((entry) => entry.providerID === OPENAI_PROVIDER_ID);
+      if (openaiSelection) {
+        openaiConfig = parseOpenAIOptions(config.provider?.openai, openaiSelection.model);
       }
       return Promise.resolve();
     },
@@ -1423,9 +1429,12 @@ var WebsearchCitedPlugin = () => {
           if (configError) {
             throw new Error(configError);
           }
-          if (!selectedProvider || !selectedModel) {
+          const fallback = selections[0];
+          if (!fallback) {
             throw new Error("Missing web search model configuration.");
           }
+          const callerProviderID = await resolveCallerProviderID(sdkClient, context.sessionID, context.messageID);
+          const { providerID: selectedProvider, model: selectedModel } = selections.find((entry) => entry.providerID === callerProviderID) ?? fallback;
           if (selectedProvider === OPENAI_PROVIDER_ID) {
             const getAuth2 = resolveGetAuth(OPENAI_PROVIDER_ID);
             if (!getAuth2) {
@@ -1520,5 +1529,5 @@ export {
   WebsearchCitedAnthropicPlugin
 };
 
-//# debugId=0C68F2FC632AB45464756E2164756E21
+//# debugId=3A94304CB59CB49E64756E2164756E21
 //# sourceMappingURL=index.js.map
