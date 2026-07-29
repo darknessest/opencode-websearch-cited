@@ -87,7 +87,9 @@ Set a `websearch_cited` model in your OpenCode config (required)
 }
 ```
 
-If you specify multiple `websearch_cited.models` fields in your `opencode.json`, the plugin scans `provider` entries in order and uses the first provider that contains `options.websearch_cited.model`. **The order matters**.
+If you specify multiple `websearch_cited.model` fields in your `opencode.json`, the plugin routes each search to the provider of the model that called the tool, so a google model searches with the google block and an openai model searches with the openai block.
+
+When the calling model's provider has no `websearch_cited.model`, the plugin falls back to the first `provider` entry that has one, so **the order matters** for that fallback.
 
 If auth or model config is missing, `websearch_cited` throws an error and OpenCode will display the message.
 

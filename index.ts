@@ -1,4 +1,4 @@
-import { type Plugin, tool } from "@opencode-ai/plugin";
+import { type Plugin, type PluginInput, tool } from "@opencode-ai/plugin";
 import type { Config } from "@opencode-ai/sdk";
 
 import { createGoogleWebsearchClient } from "./src/google.ts";
@@ -45,16 +45,17 @@ type SelectedWebsearchConfig = {
 };
 
 type WebsearchCitedSelection = {
-	selected?: SelectedWebsearchConfig;
+	selections: SelectedWebsearchConfig[];
 	error?: string;
 };
 
-function findFirstWebsearchCitedConfig(config: Config): WebsearchCitedSelection {
+function findWebsearchCitedConfigs(config: Config): WebsearchCitedSelection {
 	const providers = config.provider;
 	if (!providers || typeof providers !== "object") {
-		return {};
+		return { selections: [] };
 	}
 
+	const selections: SelectedWebsearchConfig[] = [];
 	let firstError: string | undefined;
 
 	for (const [providerID, providerConfig] of Object.entries(providers)) {
@@ -92,15 +93,34 @@ function findFirstWebsearchCitedConfig(config: Config): WebsearchCitedSelection 
 			continue;
 		}
 
-		return {
-			selected: {
-				providerID: providerID as SelectedProviderID,
-				model: candidate.trim(),
-			},
-		};
+		selections.push({
+			providerID: providerID as SelectedProviderID,
+			model: candidate.trim(),
+		});
 	}
 
-	return firstError ? { error: firstError } : {};
+	if (selections.length === 0 && firstError) {
+		return { selections, error: firstError };
+	}
+
+	return { selections };
+}
+
+async function resolveCallerProviderID(
+	client: PluginInput["client"] | undefined,
+	sessionID: string,
+	messageID: string
+): Promise<string | undefined> {
+	if (!client) {
+		return undefined;
+	}
+
+	const { data } = await client.session.message({ path: { id: sessionID, messageID } });
+	if (!data || data.info.role !== "assistant") {
+		return undefined;
+	}
+
+	return data.info.providerID;
 }
 
 function parseOpenAIOptions(providerConfig: unknown, model: string | undefined): OpenAIWebsearchConfig {
@@ -164,9 +184,8 @@ function parseOpenAIOptions(providerConfig: unknown, model: string | undefined):
 	return result;
 }
 
-const WebsearchCitedPlugin: Plugin = () => {
-	let selectedProvider: SelectedProviderID | undefined;
-	let selectedModel: string | undefined;
+const WebsearchCitedPlugin: Plugin = ({ client: sdkClient }) => {
+	let selections: SelectedWebsearchConfig[] = [];
 	let openaiConfig: OpenAIWebsearchConfig = {};
 	let configError: string | undefined;
 
@@ -185,20 +204,15 @@ const WebsearchCitedPlugin: Plugin = () => {
 			],
 		},
 		config: (config) => {
-			const { selected, error } = findFirstWebsearchCitedConfig(config);
+			const { selections: found, error } = findWebsearchCitedConfigs(config);
 
-			selectedProvider = undefined;
-			selectedModel = undefined;
+			selections = found;
 			openaiConfig = {};
 			configError = error;
 
-			if (selected) {
-				selectedProvider = selected.providerID;
-				selectedModel = selected.model;
-				if (selectedProvider === OPENAI_PROVIDER_ID) {
-					const openaiProvider = config.provider?.openai;
-					openaiConfig = parseOpenAIOptions(openaiProvider, selectedModel);
-				}
+			const openaiSelection = found.find((entry) => entry.providerID === OPENAI_PROVIDER_ID);
+			if (openaiSelection) {
+				openaiConfig = parseOpenAIOptions(config.provider?.openai, openaiSelection.model);
 			}
 
 			return Promise.resolve();
@@ -225,9 +239,14 @@ const WebsearchCitedPlugin: Plugin = () => {
 						throw new Error(configError);
 					}
 
-					if (!selectedProvider || !selectedModel) {
+					const fallback = selections[0];
+					if (!fallback) {
 						throw new Error("Missing web search model configuration.");
 					}
+
+					const callerProviderID = await resolveCallerProviderID(sdkClient, context.sessionID, context.messageID);
+					const { providerID: selectedProvider, model: selectedModel } =
+						selections.find((entry) => entry.providerID === callerProviderID) ?? fallback;
 
 					if (selectedProvider === OPENAI_PROVIDER_ID) {
 						const getAuth = resolveGetAuth(OPENAI_PROVIDER_ID);
