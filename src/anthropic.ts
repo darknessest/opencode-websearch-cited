@@ -2,9 +2,10 @@ import type { Auth as ProviderAuth } from "@opencode-ai/sdk";
 import type { GetAuth, WebsearchClient } from "./types.ts";
 
 type AnthropicWebSearchTool = {
-	type: "web_search_20250305";
+	type: "web_search_20260318";
 	name: "web_search";
 	max_uses: number;
+	allowed_callers: ["direct"];
 };
 
 type AnthropicTextBlock = {
@@ -242,9 +243,12 @@ async function runAnthropicWebSearch(options: AnthropicWebSearchOptions): Promis
 		],
 		tools: [
 			{
-				type: "web_search_20250305",
+				type: "web_search_20260318",
 				name: "web_search",
 				max_uses: ANTHROPIC_MAX_SEARCH_USES,
+				// NOTE: without this, the tool defaults to code execution and returns 200 with zero searches
+				// and no citations whenever the caller has no code execution access.
+				allowed_callers: ["direct"],
 			},
 		],
 	};
