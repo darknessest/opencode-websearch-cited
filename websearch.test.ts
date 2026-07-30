@@ -29,19 +29,20 @@ const ANTHROPIC_CONFIG: Config = {
 	},
 };
 
-// Captured 2026-07-29 from POST https://api.anthropic.com/v1/messages (web_search_20250305), trimmed.
+// Captured 2026-07-30 from POST https://api.anthropic.com/v1/messages
+// (web_search_20260318, allowed_callers ["direct"]), trimmed to two results.
 const ANTHROPIC_LIVE_RESPONSE = {
 	stop_reason: "end_turn",
 	content: [
 		{
 			type: "server_tool_use",
-			id: "srvtoolu_0152WddXP9B7k2P2K8QQbPRE",
+			id: "srvtoolu_014T7BRVj9scndT88zJyibnz",
 			name: "web_search",
-			input: { query: "latest stable Bun version" },
+			input: { query: "latest stable version of Bun" },
 		},
 		{
 			type: "web_search_tool_result",
-			tool_use_id: "srvtoolu_0152WddXP9B7k2P2K8QQbPRE",
+			tool_use_id: "srvtoolu_014T7BRVj9scndT88zJyibnz",
 			content: [
 				{
 					type: "web_search_result",
@@ -52,28 +53,28 @@ const ANTHROPIC_LIVE_RESPONSE = {
 				},
 				{
 					type: "web_search_result",
-					title: "Releases · oven-sh/bun",
-					url: "https://github.com/oven-sh/bun/releases",
+					title: "Bun 1.3.14: Latest Bun Version - What Version",
+					url: "https://www.what-version.com/latest-version/bun/",
 					encrypted_content: "EsEICioIEhgCIiRjMzBlNDcy",
-					page_age: null,
+					page_age: "June 23, 2026",
 				},
 			],
 		},
-		{ type: "text", text: "The latest stable version of Bun is **v1.3.14**. " },
+		{ type: "text", text: "The latest stable version of Bun is " },
 		{
 			type: "text",
-			text: "It was released on **May 13, 2026**, as confirmed by the official GitHub releases page.",
+			text: "**Bun v1.3.14**, released on **May 13, 2026**.",
 			citations: [
 				{
 					type: "web_search_result_location",
-					cited_text: "Bun v1.3.14 Latest · Latest · Compare · Filter · Loading · ",
+					cited_text: "Bun v1.3.14 Latest · Latest · Compare · Filter · Loading · T",
 					url: "https://github.com/oven-sh/bun/releases",
 					title: "Releases · oven-sh/bun",
 					encrypted_index: "Eo8BCioIEhgCIiRjMzBlNDcy",
 				},
 				{
 					type: "web_search_result_location",
-					cited_text: "Jarred-Sumner released this · 13 May 03:48 · bun-v1.3.14 · ",
+					cited_text: "View all tags · Jarred-Sumner released this · 13 May 03:48 ·",
 					url: "https://github.com/oven-sh/bun/releases",
 					title: "Releases · oven-sh/bun",
 					encrypted_index: "Eo8BCioIEhgCIiRjMzBlNDcz",
@@ -353,7 +354,7 @@ describe("formatAnthropicWebSearchResponse", () => {
 		const result = formatAnthropicWebSearchResponse(ANTHROPIC_LIVE_RESPONSE, "latest stable Bun version");
 
 		expect(result).toBe(
-			"The latest stable version of Bun is **v1.3.14**. It was released on **May 13, 2026**, as confirmed by the official GitHub releases page.[1]\n\nSources:\n[1] Releases · oven-sh/bun (https://github.com/oven-sh/bun/releases)"
+			"The latest stable version of Bun is **Bun v1.3.14**, released on **May 13, 2026**.[1]\n\nSources:\n[1] Releases · oven-sh/bun (https://github.com/oven-sh/bun/releases)"
 		);
 	});
 });
@@ -1043,8 +1044,9 @@ describe("WebsearchCitedPlugin", () => {
 			Array.isArray(tools) && tools[0] && typeof tools[0] === "object"
 				? (tools[0] as Record<string, unknown>)
 				: undefined;
-		expect(tool0?.type).toBe("web_search_20250305");
+		expect(tool0?.type).toBe("web_search_20260318");
 		expect(tool0?.name).toBe("web_search");
+		expect(tool0?.allowed_callers).toEqual(["direct"]);
 
 		const system = parsed.system;
 		expect(Array.isArray(system) ? system.length : 0).toBe(1);
