@@ -156,9 +156,10 @@ async function runAnthropicWebSearch(options) {
     ],
     tools: [
       {
-        type: "web_search_20250305",
+        type: "web_search_20260318",
         name: "web_search",
-        max_uses: ANTHROPIC_MAX_SEARCH_USES
+        max_uses: ANTHROPIC_MAX_SEARCH_USES,
+        allowed_callers: ["direct"]
       }
     ]
   };
@@ -1529,5 +1530,5 @@ export {
   WebsearchCitedAnthropicPlugin
 };
 
-//# debugId=3A94304CB59CB49E64756E2164756E21
+//# debugId=AA3FD18B8F0C211464756E2164756E21
 //# sourceMappingURL=index.js.map
