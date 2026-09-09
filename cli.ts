@@ -164,7 +164,10 @@ async function loadProviderAuth(filepath: string, providerID: string): Promise<P
 function createPluginInput(): PluginInput {
 	const directory = process.cwd();
 	const input: PluginInput = {
-		client: {} as unknown as PluginInput["client"],
+		// The CLI has no session, so caller-provider routing always falls back to config order.
+		client: {
+			session: { message: async () => ({ data: undefined }) },
+		} as unknown as PluginInput["client"],
 		project: {} as unknown as PluginInput["project"],
 		directory,
 		worktree: directory,
