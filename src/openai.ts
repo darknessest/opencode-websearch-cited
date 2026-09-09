@@ -1,6 +1,6 @@
 import type { Auth as ProviderAuth } from "@opencode-ai/sdk";
-import codexPrompt from "./codex_prompt.txt" with { type: "text" };
 import type { GetAuth, WebsearchClient } from "./types.ts";
+import websearchPrompt from "./websearch_prompt.txt" with { type: "text" };
 
 type OpenAIReasoningConfig = {
 	effort?: string;
@@ -145,7 +145,7 @@ async function runOpenAIWebSearch(options: OpenAIWebSearchOptions): Promise<stri
 
 	const body: OpenAIResponsesRequest = {
 		model: normalizedModel,
-		instructions: "",
+		instructions: websearchPrompt,
 		input: [
 			{
 				role: "user",
@@ -185,13 +185,6 @@ async function runOpenAIWebSearch(options: OpenAIWebSearchOptions): Promise<stri
 	body.stream = true;
 	body.tool_choice = "auto";
 	body.parallel_tool_calls = true;
-
-	if (isOAuth) {
-		// NOTE: Do not modify Codex backend instructions; invalid instructions will be rejected.
-		body.instructions = codexPrompt;
-	} else {
-		body.instructions = "You are an AI assistant answering a single web search query for the user.";
-	}
 
 	const url = isOAuth ? "https://chatgpt.com/backend-api/codex/responses" : "https://api.openai.com/v1/responses";
 

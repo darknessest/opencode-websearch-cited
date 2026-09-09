@@ -47,7 +47,6 @@
   },
   "scripts": {
     "prepare": "bunx husky",
-    "sync:codex-prompt": "bun scripts/sync-codex-prompt.ts",
     "check": "biome check --write && tsgo --noEmit",
     "test:agent": "AGENT=1 bun test --bail",
     "build": "bun build index.ts --outdir dist --target node --format esm --sourcemap --external @opencode-ai/plugin --external @opencode-ai/sdk",
